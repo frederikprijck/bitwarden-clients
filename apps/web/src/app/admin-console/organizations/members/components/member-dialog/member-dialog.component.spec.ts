@@ -4,6 +4,7 @@ import {
   ComponentFixtureAutoDetect,
   TestBed,
   fakeAsync,
+  flushMicrotasks,
 } from "@angular/core/testing";
 import { NoopAnimationsModule } from "@angular/platform-browser/animations";
 import { mock } from "jest-mock-extended";
@@ -11,6 +12,7 @@ import { mock } from "jest-mock-extended";
 import { OrganizationService } from "@bitwarden/common/admin-console/abstractions/organization/organization.service.abstraction";
 import { OrganizationUserService } from "@bitwarden/common/admin-console/abstractions/organization-user/organization-user.service";
 import { Organization } from "@bitwarden/common/admin-console/models/domain/organization";
+import { PlanType } from "@bitwarden/common/billing/enums";
 import { ConfigServiceAbstraction } from "@bitwarden/common/platform/abstractions/config/config.service.abstraction";
 import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.service";
 import { PlatformUtilsService } from "@bitwarden/common/platform/abstractions/platform-utils.service";
@@ -87,9 +89,13 @@ describe("MemberDialogComponent", () => {
   beforeEach(() => {
     const organizationService = TestBed.inject(OrganizationService);
     const collectionAdminService = TestBed.inject(CollectionAdminService);
+    const i18nService = TestBed.inject(I18nService);
 
-    jest.spyOn(organizationService, "get").mockReturnValue({} as unknown as Organization);
+    jest
+      .spyOn(organizationService, "get")
+      .mockReturnValue({ seats: 2, planProductType: PlanType.Free } as unknown as Organization);
     jest.spyOn(collectionAdminService, "getAll").mockResolvedValue([]);
+    jest.spyOn(i18nService, "t").mockImplementation((key) => key);
 
     fixture = TestBed.createComponent(MemberDialogComponent);
     component = fixture.componentInstance;
@@ -114,5 +120,62 @@ describe("MemberDialogComponent", () => {
     emailInput.dispatchEvent(new KeyboardEvent("keydown", { key: "enter" }));
 
     expect(userServiceMock.invite).toHaveBeenCalledWith(["test@mydomain.com"], expect.anything());
+  }));
+
+  it("should not allow inviting a user when no email provided", fakeAsync(() => {
+    // const form: HTMLFormElement = fixture.nativeElement.querySelector("form");
+    // form.submit();
+
+    const emailInput: HTMLInputElement = fixture.nativeElement.querySelector("#emails");
+
+    //emailInput.value = "test";
+    emailInput.dispatchEvent(new Event("input"));
+    emailInput.dispatchEvent(new KeyboardEvent("keydown", { key: "enter" }));
+
+    flushMicrotasks();
+    fixture.detectChanges();
+
+    const describedBy = emailInput.getAttribute("aria-describedby");
+    const error: HTMLFormElement = fixture.nativeElement.querySelector(`#${describedBy}`);
+
+    expect(error.textContent).toContain("inputRequired");
+  }));
+
+  it("should not allow inviting a user when an invalid email is provided", fakeAsync(() => {
+    // const form: HTMLFormElement = fixture.nativeElement.querySelector("form");
+    // form.submit();
+
+    const emailInput: HTMLInputElement = fixture.nativeElement.querySelector("#emails");
+
+    emailInput.value = "test";
+    emailInput.dispatchEvent(new Event("input"));
+    emailInput.dispatchEvent(new KeyboardEvent("keydown", { key: "enter" }));
+
+    flushMicrotasks();
+    fixture.detectChanges();
+
+    const describedBy = emailInput.getAttribute("aria-describedby");
+    const error: HTMLFormElement = fixture.nativeElement.querySelector(`#${describedBy}`);
+
+    expect(error.textContent).toContain("multipleInputEmails");
+  }));
+
+  it("should not allow inviting a user when an limit reached", fakeAsync(() => {
+    // const form: HTMLFormElement = fixture.nativeElement.querySelector("form");
+    // form.submit();
+
+    const emailInput: HTMLInputElement = fixture.nativeElement.querySelector("#emails");
+
+    emailInput.value = "test@mydomain.com, test2@mydomain.com, test3@mydomain.com";
+    emailInput.dispatchEvent(new Event("input"));
+    emailInput.dispatchEvent(new KeyboardEvent("keydown", { key: "enter" }));
+
+    flushMicrotasks();
+    fixture.detectChanges();
+
+    const describedBy = emailInput.getAttribute("aria-describedby");
+    const error: HTMLFormElement = fixture.nativeElement.querySelector(`#${describedBy}`);
+
+    expect(error.textContent).toContain("subscriptionFreePlan");
   }));
 });
